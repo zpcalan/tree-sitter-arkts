@@ -29,8 +29,6 @@ jobs:
       
       - name: Prebuild
         run: npm run prebuild
-        env:
-          PREBUILD_PLATFORM: ${{ matrix.os == 'ubuntu-latest' && 'linux' || matrix.os == 'windows-latest' && 'win32' || 'darwin' }}
       
       - name: Upload prebuilds
         uses: actions/upload-artifact@v3

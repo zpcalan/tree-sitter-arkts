@@ -1,0 +1,19 @@
+node_modules/
+build/
+dist/
+*.log
+.DS_Store
+*.node
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 预编译文件（可选，如果想提交预编译文件就注释掉）
+# prebuilds/
+
+# 临时文件
+*.tmp
+.cache/
+

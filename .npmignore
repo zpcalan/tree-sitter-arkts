@@ -1,0 +1,45 @@
+# 开发文件
+test*.js
+*.test.js
+*.spec.js
+
+# 构建临时文件
+build/
+*.log
+*.swp
+*.swo
+*~
+
+# IDE 配置
+.vscode/
+.idea/
+*.code-workspace
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 源代码（已编译到 dist）
+index.ts
+tsconfig.json
+
+# 测试文件
+test/
+tests/
+__tests__/
+
+# Git
+.git/
+.gitignore
+
+# 其他
+node_modules/
+package-lock.json
+
+# Rust 绑定（不需要）
+bindings/rust/
+Cargo.toml
+
+# 其他绑定文件
+bindings/node/index.js
+

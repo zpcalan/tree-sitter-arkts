@@ -51,8 +51,35 @@ gypFiles.forEach(gypPath => {
     const original = content;
     
     // 替换 C++17 为 C++20
-    content = content.replace(/c\+\+17/g, 'c++20');
-    content = content.replace(/std:c\+\+17/g, 'std:c++20');
+    content = content.replace(/c\+\+17/gi, 'c++20');
+    content = content.replace(/std:c\+\+17/gi, 'std:c++20');
+    content = content.replace(/C\+\+17/gi, 'C++20');
+    
+    // 确保 macOS 使用 C++20
+    if (content.includes('xcode_settings') && !content.includes('CLANG_CXX_LANGUAGE_STANDARD')) {
+      // 在 xcode_settings 中添加 C++20 标准
+      content = content.replace(
+        /("xcode_settings"\s*:\s*\{)/,
+        '$1\n            "CLANG_CXX_LANGUAGE_STANDARD": "c++20",'
+      );
+    }
+    
+    // 确保有 cflags_cc 设置 C++20
+    if (!content.includes('"-std=c++20"') && !content.includes("'-std=c++20'")) {
+      // 在 cflags_cc 中添加 C++20，如果没有的话
+      if (content.includes('"cflags_cc"')) {
+        content = content.replace(
+          /("cflags_cc"\s*:\s*\[)/,
+          '$1\n            "-std=c++20",'
+        );
+      } else {
+        // 如果没有 cflags_cc，在 targets 中添加
+        content = content.replace(
+          /("target_name"[^}]+"sources"[^}]+)/,
+          '$1,\n      "cflags_cc": [\n        "-std=c++20"\n      ]'
+        );
+      }
+    }
     
     if (content !== original) {
       fs.writeFileSync(gypPath, content);

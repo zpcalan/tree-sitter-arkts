@@ -4,14 +4,39 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
   prebuild:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: [18, 20, 22, 24]
+        include:
+          # macOS: Node.js 18-24
+          - os: macos-latest
+            node-version: 18
+          - os: macos-latest
+            node-version: 20
+          - os: macos-latest
+            node-version: 22
+          - os: macos-latest
+            node-version: 24
+          # Ubuntu: Node.js 18-24
+          - os: ubuntu-latest
+            node-version: 18
+          - os: ubuntu-latest
+            node-version: 20
+          - os: ubuntu-latest
+            node-version: 22
+          - os: ubuntu-latest
+            node-version: 24
+          # Windows: 排除 22 和 24，只保留 18 和 20
+          - os: windows-latest
+            node-version: 18
+          - os: windows-latest
+            node-version: 20
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -21,13 +46,76 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup build tools for Linux (C++20 support)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          # 安装支持 C++20 的 GCC（GCC 10+ 支持 C++20）
+          sudo apt-get install -y build-essential g++-12 gcc-12
+          # 设置 GCC 12 为默认编译器
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100 || true
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 || true
+          # 验证编译器版本
+          echo "GCC version:"
+          gcc --version
+          echo "G++ version:"
+          g++ --version
+          # 验证 C++20 支持
+          echo 'int main() { return 0; }' | g++ -std=c++20 -x c++ - -o /dev/null && echo "✅ C++20 support confirmed" || echo "⚠️ C++20 support check failed"
       
-      - name: Generate parser
+      - name: Setup build tools for macOS (C++20 support)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # 验证编译器版本（macOS 通常使用 Clang）
+          echo "Clang version:"
+          clang++ --version
+          # 验证 C++20 支持
+          echo 'int main() { return 0; }' | clang++ -std=c++20 -x c++ - -o /dev/null && echo "✅ C++20 support confirmed" || echo "⚠️ C++20 support check failed"
+          # 确保使用最新的 Xcode Command Line Tools
+          sudo xcode-select --switch /Applications/Xcode_15.0.app/Contents/Developer 2>/dev/null || sudo xcode-select --switch /Library/Developer/CommandLineTools 2>/dev/null || true
+      
+      - name: Install dependencies (skip scripts)
+        env:
+          # 在安装依赖时就设置 C++20，确保 tree-sitter 等依赖也使用 C++20 编译
+          CXX: ${{ matrix.os == 'ubuntu-latest' && 'g++-12' || (matrix.os == 'macos-latest' && 'clang++' || '') }}
+          CC: ${{ matrix.os == 'ubuntu-latest' && 'gcc-12' || (matrix.os == 'macos-latest' && 'clang' || '') }}
+          # macOS 需要设置 C++20 标准
+          CXXFLAGS: ${{ matrix.os == 'macos-latest' && '-std=c++20' || (matrix.os == 'ubuntu-latest' && '-std=c++20' || '') }}
+        run: npm ci --ignore-scripts
+      
+      - name: Fix tree-sitter for C++20
+        run: npm run fix-tree-sitter
+      
+      - name: Rebuild native modules with C++20
+        env:
+          # 确保修复脚本运行时也有正确的环境变量
+          CXX: ${{ matrix.os == 'ubuntu-latest' && 'g++-12' || (matrix.os == 'macos-latest' && 'clang++' || '') }}
+          CC: ${{ matrix.os == 'ubuntu-latest' && 'gcc-12' || (matrix.os == 'macos-latest' && 'clang' || '') }}
+          CXXFLAGS: ${{ matrix.os == 'macos-latest' && '-std=c++20' || (matrix.os == 'ubuntu-latest' && '-std=c++20' || '') }}
+        run: |
+          # 重新构建所有原生模块以确保使用 C++20
+          npm rebuild tree-sitter || true
+          npm rebuild || true
+      
+      - name: Generate parser (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          $env:PATH = "$env:GITHUB_WORKSPACE\node_modules\.bin;$env:PATH"
+          npm run generate
+      
+      - name: Generate parser (Unix)
+        if: matrix.os != 'windows-latest'
         run: npm run generate
       
       - name: Prebuild
+        env:
+          # 确保使用支持 C++20 的编译器
+          CXX: ${{ matrix.os == 'ubuntu-latest' && 'g++-12' || (matrix.os == 'macos-latest' && 'clang++' || '') }}
+          CC: ${{ matrix.os == 'ubuntu-latest' && 'gcc-12' || (matrix.os == 'macos-latest' && 'clang' || '') }}
+          # macOS 需要设置 C++20 标准
+          CXXFLAGS: ${{ matrix.os == 'macos-latest' && '-std=c++20' || (matrix.os == 'ubuntu-latest' && '-std=c++20' || '') }}
         run: npm run prebuild
       
       - name: Upload prebuilds
